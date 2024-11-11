@@ -49,6 +49,7 @@ struct kernel_thread_frame
   };
 
 /* Statistics. */
+static long long global_tick;   /* # of timer ticks that is globally managed to hold min tick value among THREAD_BLOCKED state threads */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
