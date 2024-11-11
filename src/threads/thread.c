@@ -322,6 +322,21 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
+// 1. change the state of the caller thread to `BLOCKED`
+// 2. put it to the `sleep_list`(sleep queue)
+void
+thread_sleep (int64_t ticks)
+{
+  /*
+  if the current thread is not idle thread, change the state of caller thread to BLOCKED,
+  store the local tick to wake up,
+  update the global tick if necessary,
+  and call schedule()
+  */
+
+  // when u manipulate thread list, disable interrupt!
+}
+
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void

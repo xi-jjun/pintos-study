@@ -171,7 +171,13 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  thread_tick (); // update the cpu usage for running process
+
+  /* IMPLEMENT GUIDE
+  check sleep_list and global_tick.
+  find any threads to wake up, move them to the ready_list if necessary.
+  update the global_tick.
+  */
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
