@@ -24,6 +24,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of processes in THREAD_BLOCKED state. */
+static struct list sleep_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -46,6 +49,7 @@ struct kernel_thread_frame
   };
 
 /* Statistics. */
+static long long global_ticks;  /* # of timer ticks that is globally managed to hold min tick value among THREAD_BLOCKED state threads */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
@@ -90,6 +94,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  list_init (&sleep_list);
   list_init (&ready_list);
   list_init (&all_list);
 
@@ -320,6 +325,47 @@ thread_yield (void)
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
+}
+
+// 1. change the state of the caller thread to `BLOCKED`
+// 2. put it to the `sleep_list`(sleep queue)
+void
+thread_sleep (int64_t ticks)
+{
+  /*
+  if the current thread is not idle thread, change the state of caller thread to BLOCKED,
+  store the local tick to wake up,
+  update the global tick if necessary
+  */
+  // when u manipulate thread list, disable interrupt!
+  enum intr_level old_level;
+  old_level = intr_disable ();
+
+  struct thread *cur = thread_current ();
+  ASSERT(cur != idle_thread);
+
+  cur->wakeup_ticks = ticks;
+  list_push_back(&sleep_list, &cur->elem);
+  thread_block ();
+
+  intr_set_level(old_level);
+}
+
+void
+thread_wakeup (int64_t ticks)
+{
+  struct list_elem *e = list_begin(&sleep_list);
+  while (e != list_end (&sleep_list))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (t->wakeup_ticks <= ticks)
+        {
+          e = list_remove(e);
+          thread_unblock (t); // unblock thread and add ready_list
+        }
+      else
+        e = list_next(e);
+    }
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
