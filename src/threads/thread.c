@@ -49,7 +49,7 @@ struct kernel_thread_frame
   };
 
 /* Statistics. */
-static long long global_tick;   /* # of timer ticks that is globally managed to hold min tick value among THREAD_BLOCKED state threads */
+static long long global_ticks;  /* # of timer ticks that is globally managed to hold min tick value among THREAD_BLOCKED state threads */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
@@ -338,8 +338,52 @@ thread_sleep (int64_t ticks)
   update the global tick if necessary,
   and call schedule()
   */
+  struct thread *cur = thread_current ();
+  enum intr_level old_level;
+
+      printf("==thread_sleep==\n");
+  if (cur != idle_thread)
+    {
+      printf("ticks : %d\n", ticks);
+      printf("====thread====\n");
+      //printf(" - status : %s \n", cur->status);
+      //printf(" - wakeup_ticks : %d\n", ticks);
+  old_level = intr_disable ();
+      //thread_block ();
+      cur->status = THREAD_BLOCKED;
+      cur->wakeup_ticks = ticks;
+      printf(" - status : %s \n", cur->status);
+      printf(" - wakeup_ticks : %d\n", ticks);
+      list_remove(&cur->elem);
+      list_push_back(&sleep_list, &cur->elem);
+      if (ticks < global_ticks)
+        global_ticks = ticks;
+  schedule ();
+  intr_set_level (old_level);
+    }
 
   // when u manipulate thread list, disable interrupt!
+}
+
+void
+check_sleep_threads_and_wakeup_if_necessary (int64_t ticks)
+{
+  struct list_elem *e;
+  ASSERT(intr_get_level () == INTR_OFF);
+
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t->wakeup_ticks <= ticks)
+        {
+          ASSERT(t->status == THREAD_BLOCKED);
+          list_remove(&t->elem);
+          thread_unblock (t); // unblock status and add ready queue
+          //list_push_back(&ready_list, &t->elem);
+        }
+//      if (t->wakeup_ticks > global_ticks)
+//        break;
+    }
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
