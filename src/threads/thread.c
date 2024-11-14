@@ -335,54 +335,36 @@ thread_sleep (int64_t ticks)
   /*
   if the current thread is not idle thread, change the state of caller thread to BLOCKED,
   store the local tick to wake up,
-  update the global tick if necessary,
-  and call schedule()
+  update the global tick if necessary
   */
-  struct thread *cur = thread_current ();
-  enum intr_level old_level;
-
-      printf("==thread_sleep==\n");
-  if (cur != idle_thread)
-    {
-      printf("ticks : %d\n", ticks);
-      printf("====thread====\n");
-      //printf(" - status : %s \n", cur->status);
-      //printf(" - wakeup_ticks : %d\n", ticks);
-  old_level = intr_disable ();
-      //thread_block ();
-      cur->status = THREAD_BLOCKED;
-      cur->wakeup_ticks = ticks;
-      printf(" - status : %s \n", cur->status);
-      printf(" - wakeup_ticks : %d\n", ticks);
-      list_remove(&cur->elem);
-      list_push_back(&sleep_list, &cur->elem);
-      if (ticks < global_ticks)
-        global_ticks = ticks;
-  schedule ();
-  intr_set_level (old_level);
-    }
-
   // when u manipulate thread list, disable interrupt!
+  enum intr_level old_level;
+  old_level = intr_disable ();
+
+  struct thread *cur = thread_current ();
+  ASSERT(cur != idle_thread);
+
+  cur->wakeup_ticks = ticks;
+  list_push_back(&sleep_list, &cur->elem);
+  thread_block ();
+
+  intr_set_level(old_level);
 }
 
 void
-check_sleep_threads_and_wakeup_if_necessary (int64_t ticks)
+thread_wakeup (int64_t ticks)
 {
-  struct list_elem *e;
-  ASSERT(intr_get_level () == INTR_OFF);
-
-  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+  struct list_elem *e = list_begin(&sleep_list);
+  while (e != list_end (&sleep_list))
     {
-      struct thread *t = list_entry (e, struct thread, allelem);
+      struct thread *t = list_entry (e, struct thread, elem);
       if (t->wakeup_ticks <= ticks)
         {
-          ASSERT(t->status == THREAD_BLOCKED);
-          list_remove(&t->elem);
-          thread_unblock (t); // unblock status and add ready queue
-          //list_push_back(&ready_list, &t->elem);
+          e = list_remove(e);
+          thread_unblock (t); // unblock thread and add ready_list
         }
-//      if (t->wakeup_ticks > global_ticks)
-//        break;
+      else
+        e = list_next(e);
     }
 }
 
