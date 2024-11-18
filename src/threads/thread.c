@@ -72,6 +72,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
+static bool wakeup_ticks_less (const struct list_elem *, const struct list_elem *,
+                               void *);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
@@ -346,6 +348,10 @@ thread_sleep (int64_t ticks)
 
   cur->wakeup_ticks = ticks;
   list_push_back(&sleep_list, &cur->elem);
+  list_sort (&sleep_list, wakeup_ticks_less, NULL);
+  if (global_ticks > ticks)
+    global_ticks = ticks;
+
   thread_block ();
 
   intr_set_level(old_level);
@@ -627,6 +633,17 @@ allocate_tid (void)
 
   return tid;
 }
+
+static bool
+wakeup_ticks_less (const struct list_elem *a_, const struct list_elem *b_,
+                   void *aux UNUSED)
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+
+  return a->wakeup_ticks < b->wakeup_ticks;
+}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
