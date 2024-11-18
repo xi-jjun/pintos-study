@@ -344,9 +344,72 @@ thread_sleep (int64_t ticks)
   struct thread *cur = thread_current ();
   ASSERT(cur != idle_thread);
 
+  // [SysV-ABI-386] pages 3-11 and 3-12 for details.
+  unsigned int eax, ecx, edx; // SVR4 ABI allows us to destroy them
+  unsigned int ebx, ebp, esi, edi; // requires us to preserve
+  unsigned int esp;
+
   cur->wakeup_ticks = ticks;
   list_push_back(&sleep_list, &cur->elem);
+  printf("BEFORE thread_block ()\n");
+  printf("  - thread_tid: %d\n", cur->tid);
+  //printf("  - thread_name: %s\n", cur->name);
+  //printf("  - thread_status: %d\n", cur->status);
+  //printf("  - thread_wakeup_ticks: %d\n", cur->wakeup_ticks);
+  asm volatile (
+        "mov %%eax, %0\n\t"
+        "mov %%ecx, %1\n\t"
+        "mov %%edx, %2\n\t"
+        "mov %%ebx, %3\n\t"
+        "mov %%ebp, %4\n\t"
+        "mov %%esi, %5\n\t"
+        "mov %%edi, %6\n\t"
+        "mov %%esp, %7\n\t"
+        : "=r" (eax), "=r" (ecx), "=r" (edx), "=r" (ebx), "=r" (ebp), "=r" (esi), "=r" (edi), "=g" (esp)  // 출력
+        : // 입력 없음
+        : "memory" // 메모리 변경 가능
+    );
+    // 레지스터 값 출력
+    printf("  - EAX (Return value): 0x%x\n", eax);
+    printf("  - ECX (Count register: shift and string operations): 0x%x\n", ecx);
+    printf("  - EDX (Dividend register: divide operations): 0x%x\n", edx);
+
+    printf("  - EBX (Local register variable): 0x%x\n", ebx);
+    printf("  - EBP (Stack frame pointer: Optional): 0x%x\n", ebp);
+    printf("  - ESI (Local register variable): 0x%x\n", esi);
+    printf("  - EDI (Local register variable): 0x%x\n", edi);
+    printf("  - ESP (Stack pointer): 0x%x\n", esp);
+
   thread_block ();
+
+  printf("AFTER thread_block ()\n");
+  printf("  - thread_tid: %d\n", cur->tid);
+  //printf("  - thread_name: %s\n", cur->name);
+  //printf("  - thread_status: %d\n", cur->status);
+  //printf("  - thread_wakeup_ticks: %d\n", cur->wakeup_ticks);
+  asm volatile (
+          "mov %%eax, %0\n\t"
+          "mov %%ecx, %1\n\t"
+          "mov %%edx, %2\n\t"
+          "mov %%ebx, %3\n\t"
+          "mov %%ebp, %4\n\t"
+          "mov %%esi, %5\n\t"
+          "mov %%edi, %6\n\t"
+          "mov %%esp, %7\n\t"
+          : "=r" (eax), "=r" (ecx), "=r" (edx), "=r" (ebx), "=r" (ebp), "=r" (esi), "=r" (edi), "=g" (esp)  // 출력
+          : // 입력 없음
+          : "memory" // 메모리 변경 가능
+      );
+      // 레지스터 값 출력
+      printf("  - EAX (Return value): 0x%x\n", eax);
+      printf("  - ECX (Count register: shift and string operations): 0x%x\n", ecx);
+      printf("  - EDX (Dividend register: divide operations): 0x%x\n", edx);
+
+      printf("  - EBX (Local register variable): 0x%x\n", ebx);
+      printf("  - EBP (Stack frame pointer: Optional): 0x%x\n", ebp);
+      printf("  - ESI (Local register variable): 0x%x\n", esi);
+      printf("  - EDI (Local register variable): 0x%x\n", edi);
+      printf("  - ESP (Stack pointer): 0x%x\n", esp);
 
   intr_set_level(old_level);
 }
@@ -361,7 +424,17 @@ thread_wakeup (int64_t ticks)
       if (t->wakeup_ticks <= ticks)
         {
           e = list_remove(e);
+          printf("BEFORE thread_unblock ()\n");
+          printf("  - thread_tid: %d\n", t->tid);
+//          printf("  - thread_name: %s\n", t->name);
+//          printf("  - thread_status: %d\n", t->status);
+//          printf("  - thread_wakeup_ticks: %d\n", t->wakeup_ticks);
           thread_unblock (t); // unblock thread and add ready_list
+          printf("AFTER thread_unblock ()\n");
+          printf("  - thread_tid: %d\n", t->tid);
+//          printf("  - thread_name: %s\n", t->name);
+//          printf("  - thread_status: %d\n", t->status);
+//          printf("  - thread_wakeup_ticks: %d\n", t->wakeup_ticks);
         }
       else
         e = list_next(e);
