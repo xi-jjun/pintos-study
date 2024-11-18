@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -72,6 +73,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
+static bool wakeup_ticks_less (const struct list_elem *, const struct list_elem *,
+                               void *);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
@@ -94,6 +97,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  global_ticks = INT_MAX;
   list_init (&sleep_list);
   list_init (&ready_list);
   list_init (&all_list);
@@ -346,6 +350,10 @@ thread_sleep (int64_t ticks)
 
   cur->wakeup_ticks = ticks;
   list_push_back(&sleep_list, &cur->elem);
+  list_sort (&sleep_list, wakeup_ticks_less, NULL);
+  if (global_ticks > ticks)
+    global_ticks = ticks;
+
   thread_block ();
 
   intr_set_level(old_level);
@@ -360,11 +368,11 @@ thread_wakeup (int64_t ticks)
       struct thread *t = list_entry (e, struct thread, elem);
       if (t->wakeup_ticks <= ticks)
         {
-          e = list_remove(e);
+          e = list_remove (e);
           thread_unblock (t); // unblock thread and add ready_list
         }
       else
-        e = list_next(e);
+        break;
     }
 }
 
@@ -627,6 +635,17 @@ allocate_tid (void)
 
   return tid;
 }
+
+static bool
+wakeup_ticks_less (const struct list_elem *a_, const struct list_elem *b_,
+                   void *aux UNUSED)
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+
+  return a->wakeup_ticks < b->wakeup_ticks;
+}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
