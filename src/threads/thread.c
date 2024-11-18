@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -96,6 +97,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  global_ticks = INT_MAX;
   list_init (&sleep_list);
   list_init (&ready_list);
   list_init (&all_list);
@@ -366,11 +368,11 @@ thread_wakeup (int64_t ticks)
       struct thread *t = list_entry (e, struct thread, elem);
       if (t->wakeup_ticks <= ticks)
         {
-          e = list_remove(e);
+          e = list_remove (e);
           thread_unblock (t); // unblock thread and add ready_list
         }
       else
-        e = list_next(e);
+        break;
     }
 }
 
