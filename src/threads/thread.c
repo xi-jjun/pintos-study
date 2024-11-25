@@ -75,7 +75,10 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 static bool wakeup_ticks_less (const struct list_elem *, const struct list_elem *,
                                void *);
+static bool cmp_priority (const struct list_elem *, const struct list_elem *,
+                          void *);
 void thread_schedule_tail (struct thread *prev);
+void thread_preempt_by_priority (void);
 static tid_t allocate_tid (void);
 
 /* Initializes the threading system by transforming the code
@@ -218,6 +221,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  // When a thread is added to the ready list that has a higher priority than the currently running thread,
+  // the current thread should immediately yield the processor to the new thread.
+  thread_preempt_by_priority ();
+
   return tid;
 }
 
@@ -254,7 +261,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -316,16 +323,16 @@ thread_exit (void)
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
-thread_yield (void) 
+thread_yield (void)
 {
   struct thread *cur = thread_current ();
   enum intr_level old_level;
-  
+
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread)
+    list_insert_ordered (&ready_list, &cur->elem, cmp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -393,11 +400,25 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's priority to NEW_PRIORITY.
+   If the current thread no longer has the highest priority, yields. */
 void
-thread_set_priority (int new_priority) 
+thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
+  thread_preempt_by_priority ();
+}
+
+// If the current thread no longer has the highest priority, yields.
+void
+thread_preempt_by_priority (void)
+{
+  if (list_empty (&ready_list))
+    return;
+
+  struct thread *next = list_entry (list_front (&ready_list), struct thread, elem);
+  if (thread_current ()->priority < next->priority)
+    thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -644,6 +665,16 @@ wakeup_ticks_less (const struct list_elem *a_, const struct list_elem *b_,
   const struct thread *b = list_entry (b_, struct thread, elem);
 
   return a->wakeup_ticks < b->wakeup_ticks;
+}
+
+static bool
+cmp_priority (const struct list_elem *a_, const struct list_elem *b_,
+              void *aux UNUSED)
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+
+  return a->priority > b->priority;
 }
 
 
