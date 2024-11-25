@@ -78,6 +78,7 @@ static bool wakeup_ticks_less (const struct list_elem *, const struct list_elem 
 static bool cmp_priority (const struct list_elem *, const struct list_elem *,
                           void *);
 void thread_schedule_tail (struct thread *prev);
+void thread_preempt_by_priority (void);
 static tid_t allocate_tid (void);
 
 /* Initializes the threading system by transforming the code
@@ -220,9 +221,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  // Yield the CPU if the newly one has higher priority than current one.
-  if (thread_current ()->priority < t->priority)
-    thread_yield ();
+  // When a thread is added to the ready list that has a higher priority than the currently running thread,
+  // the current thread should immediately yield the processor to the new thread.
+  thread_preempt_by_priority ();
 
   return tid;
 }
@@ -400,12 +401,24 @@ thread_foreach (thread_action_func *func, void *aux)
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY.
-   Sort the ready queue based on the new priority. */
+   If the current thread no longer has the highest priority, yields. */
 void
 thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
-  list_sort (&ready_list, cmp_priority, NULL);
+  thread_preempt_by_priority ();
+}
+
+// If the current thread no longer has the highest priority, yields.
+void
+thread_preempt_by_priority (void)
+{
+  if (list_empty (&ready_list))
+    return;
+
+  struct thread *next = list_entry (list_front (&ready_list), struct thread, elem);
+  if (thread_current ()->priority < next->priority)
+    thread_yield ();
 }
 
 /* Returns the current thread's priority. */
